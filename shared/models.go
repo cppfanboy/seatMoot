@@ -51,12 +51,13 @@ type SeatRequest struct {
 
 // SeatEvent represents an event for NATS pub/sub
 type SeatEvent struct {
-	Type      string    `json:"type"`      // held, released, booked
+	Type      string    `json:"type"`      // held, released, booked, auto_released
 	SeatID    string    `json:"seat_id"`
 	UserID    string    `json:"user_id"`
 	Status    int       `json:"status"`
 	Timestamp time.Time `json:"timestamp"`
 	ExpiresAt int64     `json:"expires_at,omitempty"`
+	Seat      *Seat     `json:"seat,omitempty"` // Full seat data for venue state updates
 }
 
 // VenueState represents the complete state of all seats

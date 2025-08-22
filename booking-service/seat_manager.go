@@ -209,6 +209,16 @@ func ReleaseSeat(seatID, userID string) error {
 }
 
 func publishSeatEvent(eventType string, seatID string, userID string, status int, expiresAt int64) {
+	// Get full seat data for the event
+	seatJSON, err := redisClient.HGet(ctx, shared.RedisKeyVenueSeats, seatID).Result()
+	var seat *shared.Seat
+	if err == nil {
+		var s shared.Seat
+		if json.Unmarshal([]byte(seatJSON), &s) == nil {
+			seat = &s
+		}
+	}
+
 	event := shared.SeatEvent{
 		Type:      eventType,
 		SeatID:    seatID,
@@ -216,11 +226,12 @@ func publishSeatEvent(eventType string, seatID string, userID string, status int
 		Status:    status,
 		Timestamp: time.Now(),
 		ExpiresAt: expiresAt,
+		Seat:      seat,
 	}
 
 	eventJSON, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("Error marshaling event: %v", err)
+		log.Printf("[ERROR] Failed to marshal %s event for seat %s: %v", eventType, seatID, err)
 		return
 	}
 
@@ -229,18 +240,31 @@ func publishSeatEvent(eventType string, seatID string, userID string, status int
 	switch eventType {
 	case "held":
 		topic = shared.NATSTopicSeatHeld
-	case "released":
+	case "released", "auto_released":
 		topic = shared.NATSTopicSeatReleased
 	case "booked":
 		topic = shared.NATSTopicSeatBooked
 	default:
-		log.Printf("Unknown event type: %s", eventType)
+		log.Printf("[ERROR] Unknown event type: %s", eventType)
 		return
 	}
 
-	if err := natsConn.Publish(topic, eventJSON); err != nil {
-		log.Printf("Error publishing to NATS: %v", err)
-	} else {
-		log.Printf("Published %s event for seat %s", eventType, seatID)
+	// Publish with retry logic
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		if err := natsConn.Publish(topic, eventJSON); err != nil {
+			if i == maxRetries-1 {
+				log.Printf("[ERROR] Failed to publish %s event for seat %s after %d attempts: %v", 
+					eventType, seatID, maxRetries, err)
+			} else {
+				log.Printf("[WARN] Retry %d/%d: Failed to publish %s event: %v", 
+					i+1, maxRetries, eventType, err)
+				time.Sleep(100 * time.Millisecond)
+			}
+		} else {
+			log.Printf("[INFO] Published %s event for seat %s to topic %s (user: %s)", 
+				eventType, seatID, topic, userID)
+			break
+		}
 	}
 }
