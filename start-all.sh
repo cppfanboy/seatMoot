@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 echo "🎭 Starting Concert Seat Booking System"
 echo "======================================"
 echo ""
@@ -48,9 +52,8 @@ echo -e "${GREEN}✅ Infrastructure started${NC}"
 # Start booking service
 echo ""
 echo "2. Starting booking service on port 8080..."
-cd booking-service && go run . > ../logs/booking-service.log 2>&1 &
+(cd "$SCRIPT_DIR/booking-service" && go run . > "$SCRIPT_DIR/logs/booking-service.log" 2>&1) &
 BOOKING_PID=$!
-cd ..
 sleep 2
 
 # Check if booking service started
@@ -67,14 +70,12 @@ echo ""
 echo "3. Starting edge servers..."
 
 # Edge server 1 on port 3000
-PORT=3000 BOOKING_SERVICE_URL=http://localhost:8080 \
-    sh -c 'cd edge-server && go run .' > logs/edge-server-3000.log 2>&1 &
+(cd "$SCRIPT_DIR/edge-server" && PORT=3000 BOOKING_SERVICE_URL=http://localhost:8080 go run . > "$SCRIPT_DIR/logs/edge-server-3000.log" 2>&1) &
 EDGE1_PID=$!
 sleep 2
 
-# Edge server 2 on port 3001
-PORT=3001 BOOKING_SERVICE_URL=http://localhost:8080 \
-    sh -c 'cd edge-server && go run .' > logs/edge-server-3001.log 2>&1 &
+# Edge server 2 on port 3001  
+(cd "$SCRIPT_DIR/edge-server" && PORT=3001 BOOKING_SERVICE_URL=http://localhost:8080 go run . > "$SCRIPT_DIR/logs/edge-server-3001.log" 2>&1) &
 EDGE2_PID=$!
 sleep 2
 
@@ -94,6 +95,7 @@ else
 fi
 
 # Save PIDs for stop script
+mkdir -p .pids
 echo "$BOOKING_PID" > .pids/booking.pid
 echo "$EDGE1_PID" > .pids/edge1.pid
 echo "$EDGE2_PID" > .pids/edge2.pid
