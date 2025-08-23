@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>Edge Server WebSocket Test</h1>
+    <div id="status">Disconnected</div>
+    <div id="messages"></div>
+    <button onclick="connect()">Connect</button>
+    <button onclick="subscribe()">Subscribe</button>
+    <button onclick="selectSeat()">Select Seat A1</button>
+    <button onclick="disconnect()">Disconnect</button>
+
+    <script>
+        let ws = null;
+
+        function connect() {
+            ws = new WebSocket('ws://localhost:3000/ws');
+            
+            ws.onopen = () => {
+                console.log('Connected to edge server');
+                document.getElementById('status').textContent = 'Connected';
+                addMessage('Connected to edge server');
+            };
+            
+            ws.onmessage = (event) => {
+                console.log('Message received:', event.data);
+                addMessage('Received: ' + event.data);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addMessage('Error: ' + error);
+            };
+            
+            ws.onclose = () => {
+                console.log('Disconnected from edge server');
+                document.getElementById('status').textContent = 'Disconnected';
+                addMessage('Disconnected from edge server');
+            };
+        }
+
+        function subscribe() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const msg = {
+                    type: 'SUBSCRIBE',
+                    data: {
+                        user_id: 'test_user_' + Math.random().toString(36).substr(2, 9)
+                    }
+                };
+                ws.send(JSON.stringify(msg));
+                addMessage('Sent: ' + JSON.stringify(msg));
+            } else {
+                alert('Not connected');
+            }
+        }
+
+        function selectSeat() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const msg = {
+                    type: 'SELECT_SEAT',
+                    data: {
+                        seat_id: 'A1',
+                        user_id: 'test_user_' + Math.random().toString(36).substr(2, 9)
+                    }
+                };
+                ws.send(JSON.stringify(msg));
+                addMessage('Sent: ' + JSON.stringify(msg));
+            } else {
+                alert('Not connected');
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function addMessage(msg) {
+            const div = document.createElement('div');
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + msg;
+            document.getElementById('messages').appendChild(div);
+        }
+    </script>
+</body>
+</html>

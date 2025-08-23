@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,8 +17,9 @@ import (
 )
 
 var (
-	natsConn *nats.Conn
-	hub      *Hub
+	natsConn       *nats.Conn
+	hub            *Hub
+	bookingClient  *BookingClient
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			// Allow connections from any origin for development
@@ -44,6 +46,14 @@ func main() {
 	}
 	defer natsConn.Close()
 	log.Println("Connected to NATS")
+
+	// Initialize booking client
+	bookingServiceURL := os.Getenv("BOOKING_SERVICE_URL")
+	if bookingServiceURL == "" {
+		bookingServiceURL = "http://localhost:8080"
+	}
+	bookingClient = NewBookingClient(bookingServiceURL)
+	log.Printf("Booking client initialized with URL: %s", bookingServiceURL)
 
 	// Initialize hub
 	hub = newHub()
@@ -79,19 +89,80 @@ func main() {
 
 func connectNATS() error {
 	var err error
-	natsConn, err = nats.Connect(nats.DefaultURL)
-	return err
+	
+	// Connect with options for better reliability
+	opts := []nats.Option{
+		nats.Name("edge-server"),
+		nats.MaxReconnects(-1), // Infinite reconnects
+		nats.ReconnectWait(2 * time.Second),
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			log.Printf("[NATS] Disconnected: %v", err)
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			log.Printf("[NATS] Reconnected to %s", nc.ConnectedUrl())
+		}),
+		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
+			log.Printf("[NATS] Error: %v", err)
+		}),
+	}
+	
+	natsConn, err = nats.Connect(nats.DefaultURL, opts...)
+	if err != nil {
+		return err
+	}
+	
+	// Verify connection
+	if !natsConn.IsConnected() {
+		return fmt.Errorf("NATS connection not established")
+	}
+	
+	return nil
 }
 
 func subscribeToNATS() error {
 	// Subscribe to all seat events
-	_, err := natsConn.Subscribe(shared.NATSTopicAllSeats, func(msg *nats.Msg) {
-		// Broadcast the event to all connected WebSocket clients
-		hub.broadcast <- msg.Data
-		log.Printf("Received NATS event on %s, broadcasting to %d clients", 
-			msg.Subject, len(hub.clients))
+	subscription, err := natsConn.Subscribe(shared.NATSTopicAllSeats, func(msg *nats.Msg) {
+		// Parse the NATS event
+		var seatEvent shared.SeatEvent
+		if err := json.Unmarshal(msg.Data, &seatEvent); err != nil {
+			log.Printf("[ERROR] Failed to parse NATS event: %v", err)
+			return
+		}
+		
+		// Convert to WebSocket message format
+		wsMessage := shared.ServerMessage{
+			Type: shared.MessageTypeSeatUpdate,
+			Data: map[string]interface{}{
+				"event_type": seatEvent.Type,
+				"seat_id":    seatEvent.SeatID,
+				"user_id":    seatEvent.UserID,
+				"status":     seatEvent.Status,
+				"timestamp":  seatEvent.Timestamp,
+				"expires_at": seatEvent.ExpiresAt,
+				"seat":       seatEvent.Seat,
+			},
+		}
+		
+		// Marshal to JSON for WebSocket
+		wsMessageJSON, err := json.Marshal(wsMessage)
+		if err != nil {
+			log.Printf("[ERROR] Failed to marshal WebSocket message: %v", err)
+			return
+		}
+		
+		// Broadcast to all connected clients
+		hub.broadcastMessage(wsMessageJSON)
+		
+		log.Printf("[NATS] Received %s event for seat %s on topic %s, broadcasting to %d clients", 
+			seatEvent.Type, seatEvent.SeatID, msg.Subject, hub.GetClientCount())
 	})
-	return err
+	
+	if err != nil {
+		return err
+	}
+	
+	log.Printf("[NATS] Subscribed to %s (subscription: %s)", shared.NATSTopicAllSeats, subscription.Subject)
+	return nil
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {

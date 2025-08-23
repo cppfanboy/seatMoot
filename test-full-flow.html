@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Full WebSocket Flow Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .client { border: 1px solid #ccc; padding: 10px; margin: 10px; }
+        .connected { background: #e8f5e9; }
+        .message { margin: 5px 0; font-size: 12px; }
+        .sent { color: blue; }
+        .received { color: green; }
+        .error { color: red; }
+        button { margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Step 4.5: Full WebSocket Flow Test</h1>
+    
+    <div class="client" id="client1">
+        <h3>Client 1 (Edge Server 1 - Port 3000)</h3>
+        <button onclick="connect1()">1. Connect to Edge 1</button>
+        <button onclick="subscribe1()">2. Subscribe</button>
+        <button onclick="selectSeatC3_1()">3. Select C3</button>
+        <button onclick="bookSeatC3_1()">4. Book C3</button>
+        <div id="messages1"></div>
+    </div>
+    
+    <div class="client" id="client2">
+        <h3>Client 2 (Edge Server 2 - Port 3001)</h3>
+        <button onclick="connect2()">1. Connect to Edge 2</button>
+        <button onclick="subscribe2()">2. Subscribe</button>
+        <button onclick="selectSeatC3_2()">3. Try Select C3</button>
+        <div id="messages2"></div>
+    </div>
+    
+    <div>
+        <h3>Test Scenario</h3>
+        <ol>
+            <li>Connect both clients to different edge servers</li>
+            <li>Subscribe both to receive updates</li>
+            <li>Client 1 selects seat C3</li>
+            <li>Client 2 should see C3 as held</li>
+            <li>Client 2 tries to select C3 (should fail)</li>
+            <li>Client 1 books C3</li>
+            <li>Both clients see C3 as booked</li>
+        </ol>
+    </div>
+
+    <script>
+        let ws1 = null;
+        let ws2 = null;
+        
+        function connect1() {
+            ws1 = new WebSocket('ws://localhost:3000/ws');
+            setupWebSocket(ws1, 'client1', 'messages1', 'Client 1');
+        }
+        
+        function connect2() {
+            ws2 = new WebSocket('ws://localhost:3001/ws');
+            setupWebSocket(ws2, 'client2', 'messages2', 'Client 2');
+        }
+        
+        function setupWebSocket(ws, clientId, messagesId, clientName) {
+            ws.onopen = () => {
+                document.getElementById(clientId).classList.add('connected');
+                addMessage(messagesId, `✅ ${clientName} connected`, 'received');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'VENUE_STATE') {
+                        addMessage(messagesId, `📊 Received venue state (${data.data.seats.length} seats)`, 'received');
+                    } else if (data.type === 'SEAT_UPDATE') {
+                        addMessage(messagesId, `🪑 Seat update: ${JSON.stringify(data.data)}`, 'received');
+                    } else {
+                        addMessage(messagesId, `📥 ${data.type}: ${JSON.stringify(data)}`, 'received');
+                    }
+                } catch (e) {
+                    addMessage(messagesId, `📥 ${event.data}`, 'received');
+                }
+            };
+            
+            ws.onerror = (error) => {
+                addMessage(messagesId, `❌ Error: ${error}`, 'error');
+            };
+            
+            ws.onclose = () => {
+                document.getElementById(clientId).classList.remove('connected');
+                addMessage(messagesId, `🔌 ${clientName} disconnected`, 'error');
+            };
+        }
+        
+        function subscribe1() {
+            if (ws1 && ws1.readyState === WebSocket.OPEN) {
+                const msg = {type: 'SUBSCRIBE', data: {user_id: 'user1'}};
+                ws1.send(JSON.stringify(msg));
+                addMessage('messages1', `📤 Sent: ${JSON.stringify(msg)}`, 'sent');
+            }
+        }
+        
+        function subscribe2() {
+            if (ws2 && ws2.readyState === WebSocket.OPEN) {
+                const msg = {type: 'SUBSCRIBE', data: {user_id: 'user2'}};
+                ws2.send(JSON.stringify(msg));
+                addMessage('messages2', `📤 Sent: ${JSON.stringify(msg)}`, 'sent');
+            }
+        }
+        
+        function selectSeatC3_1() {
+            if (ws1 && ws1.readyState === WebSocket.OPEN) {
+                const msg = {type: 'SELECT_SEAT', data: {seat_id: 'C3', user_id: 'user1'}};
+                ws1.send(JSON.stringify(msg));
+                addMessage('messages1', `📤 Sent: ${JSON.stringify(msg)}`, 'sent');
+            }
+        }
+        
+        function selectSeatC3_2() {
+            if (ws2 && ws2.readyState === WebSocket.OPEN) {
+                const msg = {type: 'SELECT_SEAT', data: {seat_id: 'C3', user_id: 'user2'}};
+                ws2.send(JSON.stringify(msg));
+                addMessage('messages2', `📤 Sent: ${JSON.stringify(msg)}`, 'sent');
+            }
+        }
+        
+        function bookSeatC3_1() {
+            if (ws1 && ws1.readyState === WebSocket.OPEN) {
+                const msg = {type: 'BOOK_SEAT', data: {seat_id: 'C3', user_id: 'user1'}};
+                ws1.send(JSON.stringify(msg));
+                addMessage('messages1', `📤 Sent: ${JSON.stringify(msg)}`, 'sent');
+            }
+        }
+        
+        function addMessage(elementId, message, className) {
+            const div = document.createElement('div');
+            div.className = 'message ' + className;
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            document.getElementById(elementId).appendChild(div);
+        }
+    </script>
+</body>
+</html>

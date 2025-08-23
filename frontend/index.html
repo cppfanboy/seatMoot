@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concert Seat Booking</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎭 Concert Seat Booking</h1>
+            <div class="status-bar">
+                <span id="connection-status" class="disconnected">● Disconnected</span>
+                <span id="user-info">User: <span id="user-id"></span></span>
+                <span id="available-count">Available: <span id="count">100</span>/100</span>
+            </div>
+        </header>
+        
+        <main>
+            <div class="stage">🎤 STAGE 🎤</div>
+            <div id="seat-map" class="seat-map">
+                <!-- Seats will be generated here -->
+            </div>
+            
+            <div class="legend">
+                <div><span class="seat available"></span> Available</div>
+                <div><span class="seat held"></span> Held (30s)</div>
+                <div><span class="seat booked"></span> Booked</div>
+                <div><span class="seat mine"></span> Your Selection</div>
+            </div>
+        </main>
+        
+        <aside class="actions">
+            <div id="selected-info" style="display:none;">
+                <h3>Selected Seat: <span id="selected-seat"></span></h3>
+                <button id="book-btn" class="btn btn-primary">Book Seat</button>
+                <button id="release-btn" class="btn btn-secondary">Release</button>
+                <div id="timer" class="timer"></div>
+            </div>
+            <div id="messages" class="messages"></div>
+        </aside>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

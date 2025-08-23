@@ -1,21 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
 
 	"concert-booking/shared"
 )
 
-const (
-	bookingServiceURL = "http://localhost:8080"
-	maxRetries        = 3
-	retryDelay        = 100 * time.Millisecond
-)
 
 // Response types for client feedback
 type OperationResponse struct {
@@ -67,29 +59,11 @@ func (c *Client) handleSelectSeat(data map[string]interface{}) {
 	// Update activity
 	c.lastActivity = time.Now()
 
-	// Call booking service API with retry
-	req := shared.SeatRequest{
-		SeatID: seatID,
-		UserID: userID,
-	}
-
-	resp, err := callBookingServiceWithRetry("/api/seats/select", req)
+	// Call booking service API
+	err := bookingClient.SelectSeat(seatID, userID)
 	if err != nil {
 		log.Printf("[ERROR] Failed to select seat %s for user %s: %v", seatID, userID, err)
-		c.sendOperationResponse("SELECT_SEAT_RESPONSE", false, 
-			fmt.Sprintf("Service unavailable: %v", err), nil)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Parse response
-	if resp.StatusCode != http.StatusOK {
-		var errResp shared.ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil {
-			c.sendOperationResponse("SELECT_SEAT_RESPONSE", false, errResp.Error, nil)
-		} else {
-			c.sendOperationResponse("SELECT_SEAT_RESPONSE", false, "Failed to select seat", nil)
-		}
+		c.sendOperationResponse("SELECT_SEAT_RESPONSE", false, err.Error(), nil)
 		return
 	}
 
@@ -120,29 +94,11 @@ func (c *Client) handleBookSeat(data map[string]interface{}) {
 	// Update activity
 	c.lastActivity = time.Now()
 
-	// Call booking service API with retry
-	req := shared.SeatRequest{
-		SeatID: seatID,
-		UserID: userID,
-	}
-
-	resp, err := callBookingServiceWithRetry("/api/seats/book", req)
+	// Call booking service API
+	err := bookingClient.BookSeat(seatID, userID)
 	if err != nil {
 		log.Printf("[ERROR] Failed to book seat %s for user %s: %v", seatID, userID, err)
-		c.sendOperationResponse("BOOK_SEAT_RESPONSE", false, 
-			fmt.Sprintf("Service unavailable: %v", err), nil)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Parse response
-	if resp.StatusCode != http.StatusOK {
-		var errResp shared.ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil {
-			c.sendOperationResponse("BOOK_SEAT_RESPONSE", false, errResp.Error, nil)
-		} else {
-			c.sendOperationResponse("BOOK_SEAT_RESPONSE", false, "Failed to book seat", nil)
-		}
+		c.sendOperationResponse("BOOK_SEAT_RESPONSE", false, err.Error(), nil)
 		return
 	}
 
@@ -173,29 +129,11 @@ func (c *Client) handleReleaseSeat(data map[string]interface{}) {
 	// Update activity
 	c.lastActivity = time.Now()
 
-	// Call booking service API with retry
-	req := shared.SeatRequest{
-		SeatID: seatID,
-		UserID: userID,
-	}
-
-	resp, err := callBookingServiceWithRetry("/api/seats/release", req)
+	// Call booking service API
+	err := bookingClient.ReleaseSeat(seatID, userID)
 	if err != nil {
 		log.Printf("[ERROR] Failed to release seat %s for user %s: %v", seatID, userID, err)
-		c.sendOperationResponse("RELEASE_SEAT_RESPONSE", false, 
-			fmt.Sprintf("Service unavailable: %v", err), nil)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Parse response
-	if resp.StatusCode != http.StatusOK {
-		var errResp shared.ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil {
-			c.sendOperationResponse("RELEASE_SEAT_RESPONSE", false, errResp.Error, nil)
-		} else {
-			c.sendOperationResponse("RELEASE_SEAT_RESPONSE", false, "Failed to release seat", nil)
-		}
+		c.sendOperationResponse("RELEASE_SEAT_RESPONSE", false, err.Error(), nil)
 		return
 	}
 
@@ -208,29 +146,11 @@ func (c *Client) handleReleaseSeat(data map[string]interface{}) {
 }
 
 func (c *Client) sendVenueState() {
-	// Get all seats from booking service with timeout
-	client := &http.Client{
-		Timeout: 3 * time.Second,
-	}
-	
-	resp, err := client.Get(bookingServiceURL + "/api/seats")
+	// Get all seats from booking service
+	seats, err := bookingClient.GetAllSeats()
 	if err != nil {
 		log.Printf("[ERROR] Failed to get venue state for client %s: %v", c.id, err)
 		c.sendOperationResponse("VENUE_STATE_ERROR", false, "Failed to load venue state", nil)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("[ERROR] Venue state request failed with status %d", resp.StatusCode)
-		c.sendOperationResponse("VENUE_STATE_ERROR", false, "Failed to load venue state", nil)
-		return
-	}
-
-	var seats []shared.Seat
-	if err := json.NewDecoder(resp.Body).Decode(&seats); err != nil {
-		log.Printf("[ERROR] Failed to decode venue state: %v", err)
-		c.sendOperationResponse("VENUE_STATE_ERROR", false, "Invalid venue data", nil)
 		return
 	}
 
@@ -239,44 +159,6 @@ func (c *Client) sendVenueState() {
 	log.Printf("[VENUE] Sent venue state to client %s (%d seats)", c.id, len(seats))
 }
 
-func callBookingService(endpoint string, data interface{}) (*http.Response, error) {
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	req, err := http.NewRequest("POST", bookingServiceURL+endpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	return client.Do(req)
-}
-
-// callBookingServiceWithRetry attempts to call the booking service with retries
-func callBookingServiceWithRetry(endpoint string, data interface{}) (*http.Response, error) {
-	var lastErr error
-	
-	for i := 0; i < maxRetries; i++ {
-		resp, err := callBookingService(endpoint, data)
-		if err == nil {
-			return resp, nil
-		}
-		
-		lastErr = err
-		if i < maxRetries-1 {
-			log.Printf("[RETRY %d/%d] Failed to call %s: %v", i+1, maxRetries, endpoint, err)
-			time.Sleep(retryDelay)
-		}
-	}
-	
-	return nil, fmt.Errorf("failed after %d attempts: %w", maxRetries, lastErr)
-}
 
 // sendOperationResponse sends a structured response to the client
 func (c *Client) sendOperationResponse(msgType string, success bool, message string, data interface{}) {

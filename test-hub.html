@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hub Test</title>
+</head>
+<body>
+    <h1>Enhanced Hub Test</h1>
+    <button onclick="connect1()">Connect Client 1</button>
+    <button onclick="connect2()">Connect Client 2</button>
+    <button onclick="checkStats()">Check Stats</button>
+    <button onclick="broadcast()">Trigger Broadcast</button>
+    <div id="output"></div>
+
+    <script>
+        let ws1 = null;
+        let ws2 = null;
+        
+        function connect1() {
+            ws1 = new WebSocket('ws://localhost:3000/ws');
+            ws1.onopen = () => addMessage('Client 1 connected');
+            ws1.onmessage = (e) => addMessage('Client 1 received: ' + e.data);
+            ws1.onclose = () => addMessage('Client 1 disconnected');
+        }
+        
+        function connect2() {
+            ws2 = new WebSocket('ws://localhost:3000/ws');
+            ws2.onopen = () => addMessage('Client 2 connected');
+            ws2.onmessage = (e) => addMessage('Client 2 received: ' + e.data);
+            ws2.onclose = () => addMessage('Client 2 disconnected');
+        }
+        
+        function checkStats() {
+            fetch('http://localhost:3000/stats')
+                .then(r => r.json())
+                .then(stats => {
+                    addMessage('Stats: ' + JSON.stringify(stats, null, 2));
+                });
+        }
+        
+        function broadcast() {
+            if (ws1 && ws1.readyState === WebSocket.OPEN) {
+                ws1.send(JSON.stringify({
+                    type: 'SELECT_SEAT',
+                    data: {seat_id: 'G1', user_id: 'test_user'}
+                }));
+            }
+        }
+        
+        function addMessage(msg) {
+            const div = document.createElement('div');
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + msg;
+            document.getElementById('output').appendChild(div);
+        }
+    </script>
+</body>
+</html>
