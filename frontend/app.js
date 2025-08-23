@@ -4,7 +4,14 @@ class SeatBookingApp {
         this.seats = {};
         this.selectedSeat = null;
         this.userId = this.generateUserId();
-        this.wsUrl = 'ws://localhost:3000/ws';
+        // Dynamic WebSocket URL - uses current host and appropriate protocol
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        // If running directly (port 8000), use edge server directly
+        // If running through NGINX (port 80), use /ws endpoint
+        this.wsUrl = window.location.port === '8000' 
+            ? 'ws://localhost:3000/ws' 
+            : `${protocol}//${host}/ws`;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
         this.maxReconnectAttempts = 10;

@@ -1,0 +1,27 @@
+2025/08/23 13:48:59 Starting booking service...
+2025/08/23 13:48:59 Connected to Redis
+2025/08/23 13:48:59 Connected to NATS
+2025/08/23 13:48:59 Venue already initialized, skipping...
+2025/08/23 13:48:59 Venue initialized with 100 seats
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /api/seats                --> main.handleGetSeats (3 handlers)
+[GIN-debug] POST   /api/seats/select         --> main.handleSelectSeat (3 handlers)
+[GIN-debug] POST   /api/seats/book           --> main.handleBookSeat (3 handlers)
+[GIN-debug] POST   /api/seats/release        --> main.handleReleaseSeat (3 handlers)
+[GIN-debug] GET    /health                   --> main.setupRoutes.func1 (3 handlers)
+2025/08/23 13:48:59 Timer service started - checking every 2s
+2025/08/23 13:48:59 Timer service started
+2025/08/23 13:48:59 Booking service started on :8080
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on :8080
+[GIN] 2025/08/23 - 13:51:47 | 200 |      24.541µs |      172.25.0.1 | GET      "/health"
+[GIN] 2025/08/23 - 13:52:02 | 200 |    1.350167ms |      172.25.0.1 | GET      "/api/seats"
+[GIN] 2025/08/23 - 13:52:43 | 200 |     103.875µs |      172.25.0.1 | GET      "/health"
+[GIN] 2025/08/23 - 13:52:43 | 200 |    1.006333ms |      172.25.0.1 | GET      "/api/seats"
+signal: killed

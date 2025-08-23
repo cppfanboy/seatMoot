@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - booking-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+  
+  nats:
+    image: nats:latest
+    restart: unless-stopped
+    command: ["-js"]  # Enable JetStream
+    networks:
+      - booking-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+  
+  booking-service:
+    build:
+      context: ./booking-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis:6379
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      - redis
+      - nats
+    networks:
+      - booking-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  
+  edge-server-1:
+    build:
+      context: ./edge-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - BOOKING_SERVICE_URL=http://booking-service:8080
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      - booking-service
+      - nats
+    networks:
+      - booking-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  
+  edge-server-2:
+    build:
+      context: ./edge-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+      - BOOKING_SERVICE_URL=http://booking-service:8080
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      - booking-service
+      - nats
+    networks:
+      - booking-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - booking-service
+      - edge-server-1
+      - edge-server-2
+    networks:
+      - booking-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+networks:
+  booking-network:
+    driver: bridge
+
+volumes:
+  redis-data:
